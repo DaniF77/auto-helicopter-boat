@@ -54,8 +54,10 @@ class Pilot:
 
 class TestConstructor(unittest.TestCase):
     def test_TC_01_empty_name_raises_value_error(self):
-        with self.assertRaises(ValueError):
-            make(name="")
+        for name in ("", "   "):
+            with self.subTest(name=name):
+                with self.assertRaises(ValueError):
+                    make(name=name)
 
     def test_TC_02_zero_mass_raises_value_error(self):
         with self.assertRaises(ValueError):
@@ -89,11 +91,14 @@ class TestConstructor(unittest.TestCase):
 
 class TestSwitchMode(unittest.TestCase):
     def test_TC_08_switch_to_ground(self):
-        boat = make()
-        boat.switch_mode("ground")
-        self.assertEqual(boat.mode, "ground")
-        self.assertEqual(boat.energy, 95)
-        self.assertFalse(boat.is_flying)
+        # energy=100 -> 95; energy=5 хватает ровно -> 0
+        for start, expected in ((100, 95), (5, 0)):
+            with self.subTest(energy=start):
+                boat = make(energy=start)
+                boat.switch_mode("ground")
+                self.assertEqual(boat.mode, "ground")
+                self.assertEqual(boat.energy, expected)
+                self.assertFalse(boat.is_flying)
 
     def test_TC_09_switch_to_air(self):
         boat = make()
@@ -103,15 +108,22 @@ class TestSwitchMode(unittest.TestCase):
         self.assertTrue(boat.is_flying)
 
     def test_TC_10_unknown_mode_raises_value_error(self):
-        boat = make()
-        with self.assertRaises(ValueError):
-            boat.switch_mode("space")
+        # при energy=0 всё равно ValueError, а не BoatOutOfEnergy
+        for start in (100, 0):
+            with self.subTest(energy=start):
+                boat = make(energy=start)
+                with self.assertRaises(ValueError):
+                    boat.switch_mode("space")
+                self.assertEqual(boat.mode, "water")
+                self.assertEqual(boat.energy, start)
 
     def test_TC_11_same_mode_changes_nothing(self):
-        boat = make()
-        boat.switch_mode("water")
-        self.assertEqual(boat.mode, "water")
-        self.assertEqual(boat.energy, 100)
+        for start in (100, 0):
+            with self.subTest(energy=start):
+                boat = make(energy=start)
+                boat.switch_mode("water")
+                self.assertEqual(boat.mode, "water")
+                self.assertEqual(boat.energy, start)
 
     def test_TC_12_not_enough_energy_raises_and_keeps_state(self):
         boat = make(energy=4)
@@ -123,28 +135,37 @@ class TestSwitchMode(unittest.TestCase):
 
 class TestMove(unittest.TestCase):
     def test_TC_13_move_on_water(self):
-        boat = make()
-        hours = boat.move(10, "water")
-        self.assertAlmostEqual(hours, 0.2)
-        self.assertEqual(boat.energy, 90)
-        self.assertEqual(boat.position_km, 10)
+        # скорость на воде = max_speed_kmh * 0.5
+        for speed, expected_hours in ((100, 0.2), (50, 0.4)):
+            with self.subTest(max_speed_kmh=speed):
+                boat = make(max_speed_kmh=speed)
+                hours = boat.move(10, "water")
+                self.assertAlmostEqual(hours, expected_hours)
+                self.assertEqual(boat.energy, 90)
+                self.assertEqual(boat.position_km, 10)
 
     def test_TC_14_move_on_ground(self):
-        boat = make()
-        boat.switch_mode("ground")  # energy = 95
-        hours = boat.move(40, "ground")
-        self.assertAlmostEqual(hours, 0.5)
-        self.assertEqual(boat.energy, 35)
-        self.assertEqual(boat.position_km, 40)
+        # скорость на земле = max_speed_kmh * 0.8
+        for speed, expected_hours in ((100, 0.5), (50, 1.0)):
+            with self.subTest(max_speed_kmh=speed):
+                boat = make(max_speed_kmh=speed)
+                boat.switch_mode("ground")  # energy = 95
+                hours = boat.move(40, "ground")
+                self.assertAlmostEqual(hours, expected_hours)
+                self.assertEqual(boat.energy, 35)
+                self.assertEqual(boat.position_km, 40)
 
     def test_TC_15_move_in_air(self):
-        boat = make()
-        boat.switch_mode("air")  # energy = 90
-        hours = boat.move(10, "air")
-        self.assertAlmostEqual(hours, 0.1)
-        self.assertEqual(boat.energy, 60)
-        self.assertEqual(boat.position_km, 10)
-        self.assertTrue(boat.is_flying)
+        # скорость в воздухе = max_speed_kmh * 1.0
+        for speed, expected_hours in ((100, 0.1), (50, 0.2)):
+            with self.subTest(max_speed_kmh=speed):
+                boat = make(max_speed_kmh=speed)
+                boat.switch_mode("air")  # energy = 90
+                hours = boat.move(10, "air")
+                self.assertAlmostEqual(hours, expected_hours)
+                self.assertEqual(boat.energy, 60)
+                self.assertEqual(boat.position_km, 10)
+                self.assertTrue(boat.is_flying)
 
     def test_TC_16_wrong_mode_raises_and_keeps_state(self):
         boat = make()
@@ -178,11 +199,14 @@ class TestMove(unittest.TestCase):
         self.assertEqual(boat.position_km, 10)
 
     def test_TC_21_heavy_boat_sinks_and_keeps_state(self):
-        boat = make(mass_kg=2000, hull_volume_m3=1)
-        with self.assertRaises(BoatSinks):
-            boat.move(10, "water")
-        self.assertEqual(boat.energy, 100)
-        self.assertEqual(boat.position_km, 0)
+        # при energy=5 энергии не хватает, но BoatSinks проверяется раньше
+        for start in (100, 5):
+            with self.subTest(energy=start):
+                boat = make(mass_kg=2000, hull_volume_m3=1, energy=start)
+                with self.assertRaises(BoatSinks):
+                    boat.move(10, "water")
+                self.assertEqual(boat.energy, start)
+                self.assertEqual(boat.position_km, 0)
 
     def test_TC_22_mass_equal_to_buoyancy_still_floats(self):
         boat = make(mass_kg=1000, hull_volume_m3=1)
@@ -199,10 +223,14 @@ class TestCalculateEnergy(unittest.TestCase):
         self.assertEqual(boat.energy, 100)
         self.assertEqual(boat.position_km, 0)
 
-    def test_TC_24_unknown_terrain_raises_value_error(self):
+    def test_TC_24_invalid_arguments_raise_value_error(self):
         boat = make()
-        with self.assertRaises(ValueError):
-            boat.calculate_energy(10, "space")
+        for distance, terrain in ((10, "space"), (0, "water"), (-1, "water")):
+            with self.subTest(distance=distance, terrain=terrain):
+                with self.assertRaises(ValueError):
+                    boat.calculate_energy(distance, terrain)
+        self.assertEqual(boat.energy, 100)
+        self.assertEqual(boat.position_km, 0)
 
 
 class TestCanOvercome(unittest.TestCase):
@@ -232,10 +260,13 @@ class TestRefuel(unittest.TestCase):
         boat.refuel(80)
         self.assertEqual(boat.energy, 100)
 
-    def test_TC_30_zero_amount_raises_value_error(self):
+    def test_TC_30_non_positive_amount_raises_value_error(self):
         boat = make(energy=50)
-        with self.assertRaises(ValueError):
-            boat.refuel(0)
+        for amount in (0, -1):
+            with self.subTest(amount=amount):
+                with self.assertRaises(ValueError):
+                    boat.refuel(amount)
+        self.assertEqual(boat.energy, 50)
 
 
 # ---------------------------------------------------------------------------
