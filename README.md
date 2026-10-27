@@ -1,5 +1,7 @@
 # Автовертолодка
 
+![tests](https://github.com/DaniF77/auto-helicopter-boat/actions/workflows/tests.yml/badge.svg)
+
 ![Автовертолодка](avtovertolodka.png)
 
 Учебный проект по практике «Безумное средство передвижения» (БСБО-16-23, стихия: вода).
